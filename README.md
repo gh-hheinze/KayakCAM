@@ -1,12 +1,14 @@
-# NAME
+# Man page:
+
+## NAME
 
 kcam - KayakCAM command line tool
 
-# SYNOPSIS
+## SYNOPSIS
 
 kcam <OPTIONS> <YAK INPUT FILE> [<OUTPUT FILE> ...]
 
-# DESCRIPTION
+## DESCRIPTION
 
 KayakCAM is a somewhat minimalist set of Perl tools for computer-aided
 manufacturing (CAM) of kayaks. It builds on the file output of Kayak
@@ -15,7 +17,7 @@ beyond printing of stations, namely additional post-processing of the
 geometry, exporting to OpenSCAD, generating 3D models for ray tracing
 etc, and last not least CNC data.
 
-# INSTALLATION
+### INSTALLATION
 
 kcam comes along with a couple of Perl modules in the namespace of
 KayakCAM. Install these Perl modules somewhere where Perl can find
@@ -28,7 +30,7 @@ subdirectory
 	  
 with the modules.
 
-# USE
+### USE
 
 The kcam utility always takes a .yak file as its input. Its output
 depends on output options and potentially additional, auxillary input
@@ -64,25 +66,25 @@ This allows to run the tool in a continuous loop; any update to the
 yak file will result in automatic updates to the specified output
 files.
 
-# OPTIONS
+## OPTIONS
 
-## -continuous
+### -continuous
 
-        Running in a continuous loop. Interrupt with Ctrl-C.
+Running in a continuous loop. Interrupt with Ctrl-C.
 
-## -quiet
+### -quiet
 
-        Quiet. No output on console to STDERR except for errors.
+Quiet. No output on console to STDERR except for errors.
 
-## -verbose
+### -verbose
 
-        Additional output on console to STDERR
+Additional output on console to STDERR
 
-## -debug
+### -debug
 
-        Additional debugging output to STDERR
+Additional debugging output to STDERR
 
-# AUTHOR
+## AUTHOR
    
 KayakCAM Copyright (C) 2021 (helmut.heinze@icloud.com)
 
@@ -91,15 +93,15 @@ License GPLv3+: GNU GPL version 3 or later
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 
-# LIMITATIONS
+## LIMITATIONS
 
 Only tested with latest available version of Kayak Foundry 1.6.4
 
-# BUGS
+## BUGS
 
 To few features to care at this stage
 
-# TODO
+## TODO
 
 Almost everything.
 

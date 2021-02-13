@@ -150,8 +150,8 @@ my $_YAK = KayakCAM::KFoundry::parse($_YAK_FILE);
 my @_TARGETS = @ARGV;
 
 for my $target (@_TARGETS) {
-    if    ($target =~ /\.stl$/)    {  KayakCAM::KFoundry::kayak_to_stl($_YAK,$target)  }
-    elsif ($target =~ /\.scad$/)   {  KayakCAM::KFoundry::kayak_to_scad($_YAK,$target) }
+    if    ($target =~ /\.stl$/)    {  KayakCAM::Utils::kayak_to_stl($_YAK,$target)  }
+    elsif ($target =~ /\.scad$/)   {  KayakCAM::Utils::kayak_to_scad($_YAK,$target) }
     else                           {  error_usage_exit("'$target' is not a valid output file (.stl|.scad)")  }
 }
 
