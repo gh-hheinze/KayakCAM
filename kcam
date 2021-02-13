@@ -1,0 +1,172 @@
+#!/usr/bin/perl
+
+#######################################################################
+#
+# KayakCAM
+#    
+# Copyright (C) 2021 Helmut Heinze (helmut.heinze@icloud.com)
+#
+# License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>
+# This is free software: you are free to change and redistribute it.
+# There is NO WARRANTY, to the extent permitted by law.
+#
+#######################################################################
+
+
+=head1 NAME
+
+kcam - KayakCAM command line tool
+
+=head1 SYNOPSIS
+
+  kcam <OPTIONS> <YAK INPUT FILE> [<OUTPUT FILE> ...]
+
+
+=head1 DESCRIPTION
+
+KayakCAM is a somewhat minimalist set of Perl tools for computer-aided
+manufacturing (CAM) of kayaks. It builds on the file output of Kayak
+Foundry ((C) 2002-2009 by Ross Leidy) to allow for further processing
+beyond printing of stations, namely additional post-processing of the
+geometry, exporting to OpenSCAD, generating 3D models for ray tracing
+etc, and last not least CNC data.
+
+
+=head2 INSTALLATION
+
+kcam comes along with a couple of Perl modules in the namespace of
+KayakCAM. Install these Perl modules somewhere where Perl can find
+them. The kcam tool adds the current directory to the search path; in a pinch
+just invoke the script in a directory that contains a subdirectory
+
+  ./kcam
+  ./KayakCAM/<MODULES>
+
+with the modules.
+
+=head2 USE
+
+The kcam utility always takes a .yak file as its input. Its output
+depends on output options and potentially additional, auxillary input
+data.
+
+The input .yak file is either given as positional parameter, either as
+a full absolute or relative path to the .yak file>.
+
+Examples:
+
+  kcam ../../kayak.yak
+  cat ../../kayak.yak | kcam
+
+The type of output is controlled by additional positional parameters,
+representing the desired output.  The file suffix controls the type of output. For example:
+
+  kcam ../../kayak.yak  _test.stl
+
+would read the .yak file from STDIN and create an output file
+C<test.stl> for for a 3D renderer. If no output format is provided
+then a short info about kayak defined in the yak file is printed to
+STDERR.
+
+More than one output can be given in a single invokation of the tool, eg:
+
+  kcam ../../kayak.yak   _kayak.stl  _kayak.scad
+
+would produce for the yak file C<kayak.yak> both a 3D model for
+rendereing as C<_kayak.stl> and for display in OpenSCAD
+C<_kayak.scad>.
+
+This allows to run the tool in a continuous loop; any update to the
+yak file will result in automatic updates to the specified output
+files.
+
+=head1 OPTIONS
+
+=over 4
+
+B<-continuous>
+
+Running in a continuous loop. Interrupt with Ctrl-C.
+
+B<-quiet>
+
+Quiet. No output on console to STDERR except for errors.
+
+B<-verbose>
+
+Additional output on console to STDERR
+
+B<-debug>
+
+Additional debugging output to STDERR
+
+=back
+
+=cut
+ 
+use warnings;
+use strict;
+
+use Getopt::Long;
+use Pod::Usage;
+
+
+use lib ".";
+use KayakCAM::Utils;
+use KayakCAM::KFoundry;
+
+my %_OPTIONS = (
+    continuous => 0,
+    );
+
+GetOptions(
+    'help|?'     => sub{pod2usage(1); exit 0},
+    'man'        => sub{pod2usage(-exitval => 0, -verbose => 2); exit 0},
+    'continuous' => \$_OPTIONS{continuous},
+    'quiet'      => sub{KayakCAM::Utils::set_loglevel(0)},
+    'verbose'    => sub{KayakCAM::Utils::set_loglevel(2)},
+    'debug'      => sub{KayakCAM::Utils::set_loglevel(3)},
+    ) or pod2usage(2);
+
+
+sub error_usage_exit($) {
+  LOG_ERROR shift();
+  exit pod2usage(2);
+}
+
+##
+## determine input file and parse it
+##
+
+my $_YAK_FILE = shift(@ARGV) || error_usage_exit "Expect path to .yak file as first argument";
+(-f $_YAK_FILE)              || error_usage_exit "No such .yak file '$_YAK_FILE'";
+($_YAK_FILE =~ m/\.yak$/)    || error_usage_exit "Not a .yak file '$_YAK_FILE'";
+my $_YAK = KayakCAM::KFoundry::parse($_YAK_FILE);
+
+##
+## generate output files
+##
+
+my @_TARGETS = @ARGV;
+
+for my $target (@_TARGETS) {
+    if    ($target =~ /\.stl$/)    {  KayakCAM::KFoundry::kayak_to_stl($_YAK,$target)  }
+    elsif ($target =~ /\.scad$/)   {  KayakCAM::KFoundry::kayak_to_scad($_YAK,$target) }
+    else                           {  error_usage_exit("'$target' is not a valid output file (.stl|.scad)")  }
+}
+
+
+=head1 AUTHOR
+
+KayakCAM Copyright (C) 2021 (helmut.heinze@icloud.com)
+
+License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+=head1 LIMITATIONS
+
+Only tested with latest available version of Kayak Foundry 1.6.4
+
+=head1 BUGS
+
