@@ -82,6 +82,8 @@ files.
 
 =head1 OPTIONS
 
+=head2 General Options
+
 =over 4
 
 B<-continuous>
@@ -100,6 +102,45 @@ B<-debug>
 
 Additional debugging output to STDERR
 
+B<-force>
+
+Enforce fresh output files even if they are still up-to-date.
+
+=back
+
+=head2 Model
+
+=over 4
+
+=item B<stepping INT|"smart">
+
+The width of the longitudinal slices in mm, eg 50 for foam
+cutting. The resolution of the circumference is derived from the
+longitudinal stepping applying the following formula:
+
+  LOA / stepping => N points from the centre line from deck to keel.
+
+Alternatively the value "smart" optimises the resolution for rendering
+in a 3D viewer (for example higher resolution a bow and stern compared
+to the middle).
+
+Default is: 
+
+  "smart"
+
+
+=item B<bow_diameter INT>
+
+The sharpness of the bow in mm. 
+
+Default is 10.
+
+=item B<transom_width INT>
+
+The fatness of the transom in mm
+
+Default is 25.
+
 =back
 
 =cut
@@ -116,16 +157,28 @@ use KayakCAM::Utils;
 use KayakCAM::KFoundry;
 
 my %_OPTIONS = (
-    continuous => 0,
+    continuous  => 0,
+    force       => 0,
+
+    ## model
+    stepping      => 'smart', # <INT> | 'smart'
+    bow_diameter  => 10,
+    transom_width => 25,
+    
     );
 
 GetOptions(
+    ## general
     'help|?'     => sub{pod2usage(1); exit 0},
     'man'        => sub{pod2usage(-exitval => 0, -verbose => 2); exit 0},
     'continuous' => \$_OPTIONS{continuous},
     'quiet'      => sub{KayakCAM::Utils::set_loglevel(0)},
     'verbose'    => sub{KayakCAM::Utils::set_loglevel(2)},
     'debug'      => sub{KayakCAM::Utils::set_loglevel(3)},
+    'force'      => \$_OPTIONS{force},
+    ## model
+    'stepping=s' => \$_OPTIONS{stepping},  
+    
     ) or pod2usage(2);
 
 
@@ -141,7 +194,11 @@ sub error_usage_exit($) {
 my $_YAK_FILE = shift(@ARGV) || error_usage_exit "Expect path to .yak file as first argument";
 (-f $_YAK_FILE)              || error_usage_exit "No such .yak file '$_YAK_FILE'";
 ($_YAK_FILE =~ m/\.yak$/)    || error_usage_exit "Not a .yak file '$_YAK_FILE'";
-my $_YAK = KayakCAM::KFoundry::parse($_YAK_FILE);
+
+my $_YAK = undef; # YAK structure
+
+
+
 
 ##
 ## generate output files
@@ -149,10 +206,34 @@ my $_YAK = KayakCAM::KFoundry::parse($_YAK_FILE);
 
 my @_TARGETS = @ARGV;
 
-for my $target (@_TARGETS) {
-    if    ($target =~ /\.stl$/)    {  KayakCAM::Utils::kayak_to_stl($_YAK,$target)  }
-    elsif ($target =~ /\.scad$/)   {  KayakCAM::Utils::kayak_to_scad($_YAK,$target) }
-    else                           {  error_usage_exit("'$target' is not a valid output file (.stl|.scad)")  }
+while(! $_YAK || $_OPTIONS{continuous}) {
+
+    if($_OPTIONS{continuous}) {
+	system("clear");
+	print STDERR "Continuous mode - interrupt with CTRL-C!\n\n";
+    }
+
+    ## parse YAK
+    $_YAK = KayakCAM::KFoundry::parse($_YAK_FILE, \%_OPTIONS);
+
+    ## loop through targets
+    for my $target (@_TARGETS) {
+	if ($_OPTIONS{force} ||
+	    (! -f $target)   ||
+	    (stat($target))[9] < (stat($_YAK_FILE))[9]
+	    ) {
+	    ## generate fresh target
+	    if    ($target =~ /\.stl$/)    {  KayakCAM::Utils::kayak_to_stl($_YAK,$target, \%_OPTIONS) }
+	    elsif ($target =~ /\.scad$/)   {  KayakCAM::Utils::kayak_to_scad($_YAK,$target,\%_OPTIONS) }
+	    else                           {  error_usage_exit("'$target' is not a valid output file (.stl|.scad)")  }
+	}
+	else {
+	    LOG_INFO "'$target' is up-to-date"
+	}
+    }
+    if($_OPTIONS{continuous}) {
+	sleep 2;
+    }
 }
 
 

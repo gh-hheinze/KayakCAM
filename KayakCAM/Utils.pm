@@ -684,8 +684,8 @@ sub make_mesh_from_yz_strip($$$$$) {
 ## returns a wire model of the bezier lines as SCAD code
 ##
 
-sub kayak_to_scad($$) {
-    my ($yak, $path) = @_; 
+sub kayak_to_scad($$$) {
+    my ($yak, $path, $options) = @_; 
 
     my $fh;
     
@@ -715,6 +715,8 @@ sub kayak_to_scad($$) {
 
     my $thickness = 12;
 
+    my $stepping = $options->{stepping}? $options->{stepping} : 50;
+    
     print $fh join("\n",
 		## header
 		"use <dotSCAD/src/polyline3d.scad>",
@@ -732,11 +734,11 @@ sub kayak_to_scad($$) {
 		## test cs 1000
 		"union() {",
 		(map {
-		    my $x = $_ * 50;
+		    my $x = $_ * $stepping;
 		    "polyline3d(". to_scad([ map { [$x ,$_->[0],     $_->[1]] } @{getThetaCurve(KayakCAM::KFoundry::make_cs_at_x($yak, $x),50)}]) . ", 6);\n" .
 		    "polyline3d(". to_scad([ map { [$x ,$_->[0] * -1,$_->[1]] } @{getThetaCurve(KayakCAM::KFoundry::make_cs_at_x($yak, $x),50)}]) . ", 6);"
 	
-		} (1 .. int($yak->{LOA}/50))),
+		} (1 .. int($yak->{LOA}/$stepping))),
 		"}",
 		
 		## cross sections at 10, 30, 50,70 90%
@@ -744,7 +746,7 @@ sub kayak_to_scad($$) {
 		    my $pos = $_;
 		    my $x = $yak->{LOA} * $pos / 100;
 		    my $bez_cs = $yak->{BEZIER_YZ_AXIS}{"CS_$pos"};
-		    my $cs_r = [ map { [$x,$_->[0],$_->[1]] } @{getThetaCurve($bez_cs,50)}];
+		    my $cs_r = [ map { [$x,$_->[0],$_->[1]] } @{getThetaCurve($bez_cs, int($yak->{LOA}/$stepping))}];
 		    my $cs_l = mirrorCurve3D_y($cs_r);
 
 		    "color(\"lightGreen\") union() {\n"
@@ -761,9 +763,9 @@ sub kayak_to_scad($$) {
 
 		## deck & keel
 		"color(\"Red\") union() {",
-		"  polyline3d(", to_scad( mapCurve3D_x0z(getThetaCurve($yak->{BEZIER_XZ_AXIS}{DECK_FORE},100))), ", $thickness);",
-		"  polyline3d(", to_scad( mapCurve3D_x0z(getThetaCurve($yak->{BEZIER_XZ_AXIS}{DECK_AFT},100))), ", $thickness);",
-		"  polyline3d(", to_scad( mapCurve3D_x0z(getThetaCurve($yak->{BEZIER_XZ_AXIS}{KEEL},200))), ", $thickness);",
+		"  polyline3d(", to_scad( mapCurve3D_x0z(getThetaCurve($yak->{BEZIER_XZ_AXIS}{DECK_FORE}, int($yak->{LOA}/$stepping)))), ", $thickness);",
+		"  polyline3d(", to_scad( mapCurve3D_x0z(getThetaCurve($yak->{BEZIER_XZ_AXIS}{DECK_AFT},int($yak->{LOA}/$stepping)))), ", $thickness);",
+		"  polyline3d(", to_scad( mapCurve3D_x0z(getThetaCurve($yak->{BEZIER_XZ_AXIS}{KEEL},int($yak->{LOA}/$stepping)))), ", $thickness);",
 		"  }",
 		
 		## end of main union
@@ -775,11 +777,12 @@ sub kayak_to_scad($$) {
 
 
 
-sub kayak_to_mesh($) {
-    my $yak = shift();
-    
-    my $STEP_X  = 50;
-    my $PTS_CS  = 50;
+sub kayak_to_mesh($$) {
+    my $yak     = shift();
+    my $options = shift();
+    
+    my $STEP_X  = $options->{stepping}? $options->{stepping} : 50;
+    my $PTS_CS  = int($yak->{LOA} / $STEP_X);
     
     my $LOA = $yak->{LOA};
 
@@ -802,8 +805,8 @@ sub kayak_to_mesh($) {
 
 
 
-sub kayak_to_stl($$) {
-    my ($yak,$path) = @_;
+sub kayak_to_stl($$$) {
+    my ($yak,$path,$options) = @_;
 
     my $fh;
     
@@ -826,7 +829,7 @@ sub kayak_to_stl($$) {
 		       " endloop",
 		       "endfacet",
 		       "")
-    } @{kayak_to_mesh($yak)};
+    } @{kayak_to_mesh($yak,$options)};
 
     print $fh "endsolid kayak\n";
     LOG_INFO "Written STL to '$path'"

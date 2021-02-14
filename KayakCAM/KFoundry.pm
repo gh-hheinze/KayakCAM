@@ -78,8 +78,9 @@ my %_YAK = ();
 
 
 
-sub parse($) {
+sub parse($$) {
     my $yak_path = shift;
+    my $options  = shift;
 
     ## sanity checks
     $yak_path               || die "No valid path for Kayak Foundry yak file provided";
