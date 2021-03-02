@@ -135,11 +135,37 @@ The sharpness of the bow in mm.
 
 Default is 10.
 
-=item B<transom_width INT>
+=item B<transom INT>
 
 The fatness of the transom in mm
 
 Default is 25.
+
+=item B<solid-bow INT>
+
+The length of the area of solid foam in the bow
+
+Default is 200.
+
+=item B<solid-stern INT>
+
+The length of the area of solid foam in the stern
+
+Default is 200.
+
+=item B<stern-hinge INT>
+
+The position of the stern hinge, if any.
+
+Default is undefined.
+
+
+=item B<segmentation INT>
+
+For a segmented kayak, the length of the segments, eg 1900 [mm]. The
+length of the segments are measured from the bow.
+
+Default is undefined.
 
 =back
 
@@ -154,7 +180,11 @@ use Pod::Usage;
 
 use lib ".";
 use KayakCAM::Utils;
+use KayakCAM::Config;
 use KayakCAM::KFoundry;
+use KayakCAM::Design;
+
+
 
 my %_OPTIONS = (
     continuous  => 0,
@@ -163,11 +193,17 @@ my %_OPTIONS = (
     ## model
     stepping      => 'smart', # <INT> | 'smart'
     bow_diameter  => 10,
-    transom_width => 25,
-    
+    transom => 25,
+    solid_bow => 200,
+    solid_stern => 200,
+    stern_hinge => 0,
+    segmentation => 0
     );
 
-GetOptions(
+
+sub get_options() {
+    GetOptions(
+
     ## general
     'help|?'     => sub{pod2usage(1); exit 0},
     'man'        => sub{pod2usage(-exitval => 0, -verbose => 2); exit 0},
@@ -176,10 +212,18 @@ GetOptions(
     'verbose'    => sub{KayakCAM::Utils::set_loglevel(2)},
     'debug'      => sub{KayakCAM::Utils::set_loglevel(3)},
     'force'      => \$_OPTIONS{force},
+
     ## model
-    'stepping=s' => \$_OPTIONS{stepping},  
+    'stepping=s' =>     \$_OPTIONS{stepping},
+    'transom=s'  =>     \$_OPTIONS{transom},
+    'solid-stern=s' =>  \$_OPTIONS{solid_stern},
+    'solid-bow=s' =>    \$_OPTIONS{solid_bow},
+    'stern-hinge=s' =>  \$_OPTIONS{stern_hinge},
+    'segmentation=s' => \$_OPTIONS{segmentation},
     
     ) or pod2usage(2);
+}
+get_options(); # get initial options
 
 
 sub error_usage_exit($) {
@@ -198,6 +242,7 @@ my $_YAK_FILE = shift(@ARGV) || error_usage_exit "Expect path to .yak file as fi
 my $_YAK = undef; # YAK structure
 
 
+my $_CFG_FILE = $_YAK_FILE; $_CFG_FILE =~ s/\.yak$/\.kcam/;
 
 
 ##
@@ -216,6 +261,23 @@ while(! $_YAK || $_OPTIONS{continuous}) {
     ## parse YAK
     $_YAK = KayakCAM::KFoundry::parse($_YAK_FILE, \%_OPTIONS);
 
+
+    
+    if(-f $_CFG_FILE) {
+	KayakCAM::Config::parse($_CFG_FILE);
+	my $config = KayakCAM::Config::get();
+	if(defined($config->{solid_bow}))    {$_OPTIONS{solid_bow}    = $config->{solid_bow}}
+	if(defined($config->{solid_stern}))  {$_OPTIONS{solid_stern}  = $config->{solid_stern}}
+	if(defined($config->{stern_hinge}))  {$_OPTIONS{stern_hinge}  = $config->{solid_hinge}}
+	if(defined($config->{segmentation})) {$_OPTIONS{segmentation} = $config->{segmentation}}
+	if(defined($config->{transom}))      {$_OPTIONS{transom}      = $config->{transom}}
+	## allow override configured values on the command line
+	get_options();
+    }
+    else {
+	LOG_INFO "No config file '$_CFG_FILE' present";
+    }
+    
     ## loop through targets
     for my $target (@_TARGETS) {
 	if ($_OPTIONS{force} ||
@@ -223,8 +285,8 @@ while(! $_YAK || $_OPTIONS{continuous}) {
 	    (stat($target))[9] < (stat($_YAK_FILE))[9]
 	    ) {
 	    ## generate fresh target
-	    if    ($target =~ /\.stl$/)    {  KayakCAM::Utils::kayak_to_stl($_YAK,$target, \%_OPTIONS) }
-	    elsif ($target =~ /\.scad$/)   {  KayakCAM::Utils::kayak_to_scad($_YAK,$target,\%_OPTIONS) }
+	    if    ($target =~ /\.stl$/)    {  KayakCAM::Design::kayak_to_stl($_YAK,$target, \%_OPTIONS) }
+	    elsif ($target =~ /\.scad$/)   {  KayakCAM::Design::kayak_to_scad($_YAK,$target,\%_OPTIONS) }
 	    else                           {  error_usage_exit("'$target' is not a valid output file (.stl|.scad)")  }
 	}
 	else {
@@ -236,6 +298,27 @@ while(! $_YAK || $_OPTIONS{continuous}) {
     }
 }
 
+=head1 CONFIG FILE
+
+For a given *.yak file there may be a *.kcam configuration file in the
+same directory and with the same name as the *.yak file.
+
+If present its specifications are read in first; they can be overriden with optional arguments.
+
+The configuration file contains key-value pairs with the following syntax
+
+  KEY = VALUE  
+
+Spaces are optional. Comments start with C<#> and are stripped
+out. Empty lines are permissible. Any other entries are illegal.
+
+The follow keys are known; leading and trailing white space is ignored.
+
+  transom      = INTEGER   
+  solid-bow    = INTEGER   
+  solid-stern  = INTEGER
+  stern-hinge  = INTEGER
+  segmentation = INTEGER  
 
 =head1 AUTHOR
 

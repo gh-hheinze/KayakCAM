@@ -402,7 +402,7 @@ sub parse($$) {
 	 [$_YAK{BEZIER}{sheer_xy}{p7}{x}, $_YAK{BEZIER}{sheer_xy}{p7}{y}],
 	 [$_YAK{BEZIER}{sheer_xy}{p8}{x}, $_YAK{BEZIER}{sheer_xy}{p8}{y}],
 	 [$_YAK{BEZIER}{sheer_xy}{p9}{x}, $_YAK{BEZIER}{sheer_xy}{p9}{y}],
-	 [$_YAK{BEZIER}{sheer_xy}{p10}{x}, $_YAK{BEZIER}{sheer_xy}{p10}{y}],
+	 [$_YAK{BEZIER}{sheer_xy}{p10}{x},$_YAK{BEZIER}{sheer_xy}{p10}{y} + $options->{transom}/2],
 	]);
     
     
@@ -566,18 +566,31 @@ sub parse_bezier_cs($$) {
 ##
 ## generates a single Bezier cross section at point x
 ##
+## With the argument {shrink => INT} generates the skin of the
+## inner wall skin INT mm apart from the outer skin.
+##
 
-sub make_cs_at_x($$) {
-    my ($data,$x) = @_;
 
-    my $PRECISION = 5;
+sub make_cs_at_x($$$) {
+    my ($data,$x,$options) = @_;
+
+    $options = {
+	tolerance => 5,
+	shrink => 0
+    } if(!$options);
+    
+    my $TOLERANCE = $options->{tolerance}? $options->{tolerance} : 5;
+    my $SHRINK = ($options->{shrink} && $options->{shrink} =~ /^\d+$/)?
+	$options->{shrink} :
+	0;
     
     my $loa = $data->{LOA};
-    $x >= 0 && $x <= $loa || die "make_cs_at_x: x=$x is out of range";
-
+    $x =~ /^\d+$/ &&  $x >= 0 && $x <= $loa || die "make_cs_at_x: x=$x is out of range";
+    
+    
     my $percent_at_x = $x/$loa*100;
 
-    my $bh = $data->{BOW_HEIGHT} * -1;
+    my $bh = $data->{BOW_HEIGHT}   * -1;
     my $sh = $data->{STERN_HEIGHT} * -1;
     
     my $pos_ref1;
@@ -622,16 +635,18 @@ sub make_cs_at_x($$) {
     ##
     
     ## keel
-    my $point_keel_z = getPointYatX($data->{BEZIER_XZ_AXIS}{KEEL}, $x, $PRECISION);
+    my $point_keel_z = getPointYatX($data->{BEZIER_XZ_AXIS}{KEEL}, $x, $TOLERANCE);
 
     ## deck
+    my $is_coaming_area = '';
+
     my $point_deck_y = 0;  # usually the middle line unless we are at the coaming
     my $point_deck_z;
     if    ($x <= $data->{BEZIER_XZ_AXIS}{DECK_FORE}{X2}) {
-	$point_deck_z = getPointYatX($data->{BEZIER_XZ_AXIS}{DECK_FORE}, $x, $PRECISION);
+	$point_deck_z = getPointYatX($data->{BEZIER_XZ_AXIS}{DECK_FORE}, $x, $TOLERANCE);
     }
     elsif ($x <= $data->{BEZIER_XZ_AXIS}{DECK_MID}{X2}) {
-	$point_deck_z = getPointYatX($data->{BEZIER_XZ_AXIS}{DECK_MID}, $x, $PRECISION);
+	$point_deck_z = getPointYatX($data->{BEZIER_XZ_AXIS}{DECK_MID}, $x, $TOLERANCE);
 	
 	## find side edge of coaming which is angled  (stretch factor: cos(angle)  )
 	my $k_coaming = 1/cos(Math::Trig::deg2rad($data->{COAMING_ANGLE}));
@@ -639,16 +654,17 @@ sub make_cs_at_x($$) {
 	$point_deck_y = ($x_of_coaming <= $data->{BEZIER_COAMING}{X2})?
 	    getPointYatX($data->{BEZIER_COAMING}, $x_of_coaming, 5) :
 	    0;
+	$is_coaming_area = 1; 
     }
     else {
-	$point_deck_z = getPointYatX($data->{BEZIER_XZ_AXIS}{DECK_AFT}, $x, $PRECISION);
+	$point_deck_z = getPointYatX($data->{BEZIER_XZ_AXIS}{DECK_AFT}, $x, $TOLERANCE);
     }
 
 
     
     ## sheer
-    my $point_sheer_y = getPointYatX($data->{BEZIER_XY_AXIS}{SHEER}, $x, $PRECISION);
-    my $point_sheer_z = getPointYatX($data->{BEZIER_XZ_AXIS}{SHEER}, $x, $PRECISION);
+    my $point_sheer_y = getPointYatX($data->{BEZIER_XY_AXIS}{SHEER}, $x, $TOLERANCE);
+    my $point_sheer_z = getPointYatX($data->{BEZIER_XZ_AXIS}{SHEER}, $x, $TOLERANCE);
 
     ##
     ## the control points are relative to the anchor points, expressed in 10,000th of the distance to the other anchor point
@@ -658,7 +674,10 @@ sub make_cs_at_x($$) {
     my $k_deck_y = $k_hull_y;
     my $k_deck_z = ($point_deck_z - $point_sheer_z) / 10000;  # 1/10,000 of the distance between deck and sheer
 
+    ## ========================================================================
+    ##
     ## helper function
+    ##
     my $interpolated_cp = sub ($) {
 	my $name = shift;
 
@@ -669,37 +688,53 @@ sub make_cs_at_x($$) {
 	my $p2_y = $_YAK{CS}{$pos_ref2}{$name}{y};
 
 	if($pos_ref1 == 0) {
-	    $p1_x = 0; $p1_y = $data->{BOW_HEIGHT};
+	    $p1_x = 0;
+	    $p1_y = $data->{BOW_HEIGHT};
 	}
 	elsif($pos_ref2 == 0) {
-	    $p2_x = 0; $p2_y = $data->{STERN_HEIGHT};
+	    $p2_x = 0;
+	    $p2_y = $data->{STERN_HEIGHT};
 	}
 
 	my $p_x = $p1_x * $k1 + $p2_x * $k2;
 	my $p_y = $p1_y * $k1 + $p2_y * $k2;  
 	return [$p_x,$p_y];
     };
+    ##
+    ##
+    ## ========================================================================
 
     my $cp_deckcenter = &$interpolated_cp('deckcenter');
     my $cp_decksheer  = &$interpolated_cp('decksheer');
     my $cp_hullsheer  = &$interpolated_cp('hullsheer');
     my $cp_hullkeel   = &$interpolated_cp('hullkeel');
-    
-    my $bezier = CubicBezierChain(
+
+
+
+    return CubicBezierChain(
 	[
 	 ## segment deck to sheer
-	 [$point_deck_y, $point_deck_z],
-	 [($cp_deckcenter->[0] * $k_deck_y)                 , ($point_deck_z  + $cp_deckcenter->[1] * $k_deck_z)],
-	 [($point_sheer_y + $cp_decksheer->[0] * $k_deck_y) , ($point_sheer_z + $cp_decksheer->[1]  * $k_deck_z)],
-	 ## common
-	 [$point_sheer_y, $point_sheer_z],
-	 ## segment sheer to keel
-	 [$point_sheer_y + ($cp_hullsheer->[0] * $k_hull_y) , ($point_sheer_z + $cp_hullsheer->[1]  * $k_hull_z)],
-	 [($cp_hullkeel->[0] * $k_hull_y)                   , ($point_keel_z  + $cp_hullkeel->[1]   * $k_hull_z)],
-	 [0, $point_keel_z]
-	]);
+	 [$point_deck_y, $point_deck_z + $SHRINK], 
+	 
+	 
+	 ## 1st control point in coaming area matches start point
+	 ($is_coaming_area?
+	  [$point_deck_y, $point_deck_z] :
 
-    return $bezier;
+	  ## prevent y from going negative!
+	  [ (($cp_deckcenter->[0] * $k_deck_y) > $SHRINK)?  ($cp_deckcenter->[0] * $k_deck_y) - $SHRINK : 0, ($point_deck_z  + $cp_deckcenter->[1] * $k_deck_z) + $SHRINK]),
+
+	 [($point_sheer_y + $cp_decksheer->[0] * $k_deck_y) - $SHRINK, ($point_sheer_z + $cp_decksheer->[1]  * $k_deck_z) + $SHRINK],
+
+	 ## common
+	 [$point_sheer_y - $SHRINK * 1, $point_sheer_z ], 
+
+	 ## segment sheer to keel
+	 [$point_sheer_y + ($cp_hullsheer->[0] * $k_hull_y) - $SHRINK, ($point_sheer_z + $cp_hullsheer->[1]  * $k_hull_z) - $SHRINK],
+	 [($cp_hullkeel->[0] * $k_hull_y)                   - $SHRINK , ($point_keel_z  + $cp_hullkeel->[1]  * $k_hull_z) - $SHRINK],
+
+	 [0, $point_keel_z - $SHRINK]
+	]);
 }
 
 
